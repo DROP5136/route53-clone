@@ -17,6 +17,20 @@ export type HostedZone = {
   updated_at: string;
 };
 
+export const recordTypes = ["A", "AAAA", "CNAME", "TXT", "MX", "NS", "PTR", "SRV", "CAA"] as const;
+
+export type RecordTypeName = (typeof recordTypes)[number];
+
+export type DNSRecord = {
+  id: number;
+  name: string;
+  type: RecordTypeName;
+  value: string;
+  ttl: number;
+  created_at: string;
+  updated_at: string;
+};
+
 const TOKEN_KEY = "route53_access_token";
 
 export function getToken(): string | null {

@@ -111,6 +111,36 @@ def get_zone(
     return _get_owned_zone(db, zone_id, current_user.id)
 
 
+@router.put("/{zone_id}", response_model=HostedZoneResponse)
+def update_zone(
+    zone_id: int,
+    body: HostedZoneCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> HostedZone:
+    zone = _get_owned_zone(db, zone_id, current_user.id)
+    try:
+        zone.domain_name = body.domain_name
+        zone.zone_type = body.zone_type
+        zone.description = body.description
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Hosted zone already exists",
+        ) from None
+
+    db.refresh(zone)
+    return zone
+
+
 @router.delete("/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_zone(
     zone_id: int,

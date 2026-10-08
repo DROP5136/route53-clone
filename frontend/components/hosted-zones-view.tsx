@@ -11,7 +11,7 @@ import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
 import { api, ApiError, type HostedZone } from "@/lib/api";
 
-const columns = ["Hosted zone name", "Type", "Record count", "Description", "Hosted zone ID"];
+const columns = ["Hosted zone name", "Type", "Record count", "Description", "Hosted zone ID", "Actions"];
 
 function zoneTypeLabel(zoneType: HostedZone["zone_type"]) {
   return zoneType === "private" ? "Private" : "Public";
@@ -28,6 +28,7 @@ export function HostedZonesView() {
   const [createdNotice, setCreatedNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editZone, setEditZone] = useState<HostedZone | null>(null);
   const notice = createdNotice ?? (deletedName ? `Deleted hosted zone ${deletedName}.` : null);
 
   const loadZones = useCallback(async (options?: { quiet?: boolean }) => {
@@ -188,6 +189,13 @@ export function HostedZonesView() {
                   <td title="Record count is not available">—</td>
                   <td>{zone.description || "—"}</td>
                   <td>{zone.id}</td>
+                  <td>
+                    <div className="row-actions">
+                      <button className="text-button" type="button" onClick={() => setEditZone(zone)}>
+                        Edit
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))
             )}
@@ -195,12 +203,23 @@ export function HostedZonesView() {
         </table>
       </div>
       {createOpen ? (
-        <CreateHostedZoneDialog
+        <HostedZoneForm
           onClose={() => setCreateOpen(false)}
-          onCreated={async () => {
+          onSaved={async () => {
             setCreateOpen(false);
             setSearch("");
             setCreatedNotice("Hosted zone created.");
+            await loadZones({ quiet: true });
+          }}
+        />
+      ) : null}
+      {editZone ? (
+        <HostedZoneForm
+          zone={editZone}
+          onClose={() => setEditZone(null)}
+          onSaved={async () => {
+            setEditZone(null);
+            setCreatedNotice("Hosted zone updated.");
             await loadZones({ quiet: true });
           }}
         />
@@ -209,10 +228,19 @@ export function HostedZonesView() {
   );
 }
 
-function CreateHostedZoneDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => Promise<void> }) {
-  const [domainName, setDomainName] = useState("");
-  const [zoneType, setZoneType] = useState<"public" | "private">("public");
-  const [description, setDescription] = useState("");
+export function HostedZoneForm({
+  zone,
+  onClose,
+  onSaved,
+}: {
+  zone?: HostedZone;
+  onClose: () => void;
+  onSaved: (saved: HostedZone) => Promise<void>;
+}) {
+  const editing = zone !== undefined;
+  const [domainName, setDomainName] = useState(zone?.domain_name ?? "");
+  const [zoneType, setZoneType] = useState<"public" | "private">(zone?.zone_type ?? "public");
+  const [description, setDescription] = useState(zone?.description ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -230,33 +258,35 @@ function CreateHostedZoneDialog({ onClose, onCreated }: { onClose: () => void; o
     event.preventDefault();
     setError(null);
     setPending(true);
+    const payload = {
+      domain_name: domainName,
+      zone_type: zoneType,
+      description: description.trim() || null,
+    };
     try {
-      await api<HostedZone>("/zones", {
-        method: "POST",
-        body: JSON.stringify({
-          domain_name: domainName,
-          zone_type: zoneType,
-          description: description.trim() || null,
-        }),
-      });
-      await onCreated();
+      const saved = editing
+        ? await api<HostedZone>(`/zones/${zone.id}`, {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          })
+        : await api<HostedZone>("/zones", {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+      await onSaved(saved);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unable to create hosted zone");
+      setError(
+        err instanceof ApiError ? err.message : editing ? "Unable to update hosted zone" : "Unable to create hosted zone",
+      );
       setPending(false);
     }
   }
 
   return (
     <div className="modal-backdrop">
-      <form
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-zone-title"
-        onSubmit={onSubmit}
-      >
+      <form className="modal" role="dialog" aria-modal="true" aria-labelledby="zone-form-title" onSubmit={onSubmit}>
         <header className="modal-header">
-          <h2 id="create-zone-title">Create hosted zone</h2>
+          <h2 id="zone-form-title">{editing ? "Edit hosted zone" : "Create hosted zone"}</h2>
           <button className="plain-icon" type="button" aria-label="Close" onClick={onClose} disabled={pending}>
             <X size={16} strokeWidth={2} aria-hidden="true" />
           </button>
@@ -294,7 +324,7 @@ function CreateHostedZoneDialog({ onClose, onCreated }: { onClose: () => void; o
             Cancel
           </Button>
           <Button variant="primary" type="submit" disabled={pending}>
-            {pending ? "Creating" : "Create hosted zone"}
+            {pending ? "Saving" : editing ? "Save changes" : "Create hosted zone"}
           </Button>
         </footer>
       </form>

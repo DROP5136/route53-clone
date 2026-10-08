@@ -287,6 +287,8 @@ textarea {
 
 .page-actions {
   flex: none;
+  display: flex;
+  gap: 8px;
 }
 
 .btn {
@@ -404,6 +406,41 @@ textarea {
 
 .zone-link {
   font-weight: 700;
+}
+
+.records-section {
+  margin-top: 24px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.record-count {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.data-table td.record-name,
+.data-table td.record-value {
+  max-width: 420px;
+  overflow-wrap: anywhere;
+}
+
+.row-actions {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
 }
 
 .notice {
@@ -669,6 +706,11 @@ textarea {
   }
 
   .page-header {
+    flex-direction: column;
+  }
+
+  .section-heading {
+    align-items: flex-start;
     flex-direction: column;
   }
 

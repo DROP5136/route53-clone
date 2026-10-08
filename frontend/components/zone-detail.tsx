@@ -8,6 +8,8 @@ import { X } from "lucide-react";
 import { useRequireAuth } from "@/components/auth-provider";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Button } from "@/components/button";
+import { DnsRecords } from "@/components/dns-records";
+import { HostedZoneForm } from "@/components/hosted-zones-view";
 import { PageHeader } from "@/components/page-header";
 import { api, ApiError, type HostedZone } from "@/lib/api";
 
@@ -31,7 +33,9 @@ export function ZoneDetail() {
   const [zone, setZone] = useState<HostedZone | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     if (!auth.ready || !auth.token) {
@@ -85,11 +89,24 @@ export function ZoneDetail() {
         title={title}
         description="Hosted zone details."
         actions={
-          <Button onClick={() => setConfirmOpen(true)} disabled={!zone || loading}>
-            Delete hosted zone
-          </Button>
+          <>
+            <Button onClick={() => setEditOpen(true)} disabled={!zone || loading}>
+              Edit hosted zone
+            </Button>
+            <Button onClick={() => setConfirmOpen(true)} disabled={!zone || loading}>
+              Delete hosted zone
+            </Button>
+          </>
         }
       />
+      {notice ? (
+        <div className="notice notice-success" role="status">
+          <span>{notice}</span>
+          <button className="text-button" type="button" onClick={() => setNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       {loading ? <p className="status-line">Loading hosted zone.</p> : null}
       {error ? (
         <div className="notice notice-error" role="alert">
@@ -124,6 +141,18 @@ export function ZoneDetail() {
             <dd>{formatTimestamp(zone.updated_at)}</dd>
           </div>
         </dl>
+      ) : null}
+      {zone ? <DnsRecords zoneId={zone.id} /> : null}
+      {editOpen && zone ? (
+        <HostedZoneForm
+          zone={zone}
+          onClose={() => setEditOpen(false)}
+          onSaved={async (saved) => {
+            setZone(saved);
+            setEditOpen(false);
+            setNotice("Hosted zone updated.");
+          }}
+        />
       ) : null}
       {confirmOpen && zone ? (
         <DeleteHostedZoneDialog
