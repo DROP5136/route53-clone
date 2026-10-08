@@ -87,6 +87,11 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), default=_utcnow, nullable=False)
 
+    hosted_zones: Mapped[list["HostedZone"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
     @validates("username")
     def _validate_username(self, _key: str, value: str) -> str:
         if not isinstance(value, str):
@@ -119,9 +124,14 @@ class HostedZone(Base):
             "description IS NULL OR (length(trim(description)) >= 1 AND length(description) <= 1024)",
             name="ck_hosted_zones_description_length",
         ),
+        Index("ix_hosted_zones_user_id", "user_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     domain_name: Mapped[str] = mapped_column(String(253), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1024))
     zone_type: Mapped[ZoneType] = mapped_column(
@@ -144,6 +154,7 @@ class HostedZone(Base):
         nullable=False,
     )
 
+    user: Mapped[User] = relationship(back_populates="hosted_zones")
     records: Mapped[list["DNSRecord"]] = relationship(
         back_populates="hosted_zone",
         cascade="all, delete-orphan",

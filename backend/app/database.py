@@ -28,7 +28,23 @@ class Base(DeclarativeBase):
 
 
 def init_db() -> None:
+    from sqlalchemy import inspect, text
+
     from app import models
+
+    inspector = inspect(engine)
+    if inspector.has_table("hosted_zones"):
+        columns = {column["name"] for column in inspector.get_columns("hosted_zones")}
+        if "user_id" not in columns:
+            with engine.connect() as connection:
+                zone_count = connection.execute(text("SELECT COUNT(*) FROM hosted_zones")).scalar()
+                record_count = connection.execute(text("SELECT COUNT(*) FROM dns_records")).scalar()
+                if zone_count or record_count:
+                    raise RuntimeError("hosted_zones is missing user_id and already contains data")
+                connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+                connection.exec_driver_sql("DROP TABLE IF EXISTS dns_records")
+                connection.exec_driver_sql("DROP TABLE IF EXISTS hosted_zones")
+                connection.commit()
 
     models.Base.metadata.create_all(bind=engine)
 
