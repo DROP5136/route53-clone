@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
-import { SideNav } from "@/components/side-nav";
-import { TopNav } from "@/components/top-nav";
+import { AppFrame } from "@/components/app-frame";
+import { AuthProvider } from "@/components/auth-provider";
 
 import "./globals.css";
 
@@ -17,13 +17,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en">
       <body>
-        <div className="console">
-          <TopNav />
-          <div className="console-body">
-            <SideNav />
-            <main className="console-main">{children}</main>
-          </div>
-        </div>
+        <AuthProvider>
+          <AppFrame>{children}</AppFrame>
+        </AuthProvider>
       </body>
     </html>
   );

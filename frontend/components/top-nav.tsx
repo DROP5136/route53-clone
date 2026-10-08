@@ -2,6 +2,8 @@ import { Bell, CircleHelp, Settings } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
+import { AccountMenu } from "@/components/account-menu";
+
 export function TopNav() {
   return (
     <header className="topnav">
@@ -22,10 +24,7 @@ export function TopNav() {
         <button className="icon-button" type="button" aria-label="Settings">
           <Settings size={16} strokeWidth={2} aria-hidden="true" />
         </button>
-        <button className="account-button" type="button">
-          <span className="account-name">Account</span>
-          <span className="account-detail">AWS account</span>
-        </button>
+        <AccountMenu />
       </div>
     </header>
   );
