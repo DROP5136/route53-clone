@@ -119,12 +119,14 @@ export function RegisterForm() {
           <Button className="login-submit" variant="primary" type="submit" disabled={pending}>
             {pending ? "Creating account" : "Create account"}
           </Button>
-          <p className="login-return">
-            <Link href="/login">Sign in</Link>
-          </p>
-          <p className="login-return">
-            <Link href="/">Return to Route 53</Link>
-          </p>
+          <div className="login-links">
+            <p>
+              <Link href="/login">Sign in</Link>
+            </p>
+            <p>
+              <Link href="/">Return to Route 53</Link>
+            </p>
+          </div>
         </form>
       </main>
     </div>

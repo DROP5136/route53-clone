@@ -3,12 +3,13 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 import { useRequireAuth } from "@/components/auth-provider";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
+import { pageSize, TablePager } from "@/components/table-pager";
 import { api, ApiError, type HostedZone } from "@/lib/api";
 
 const columns = ["Hosted zone name", "Type", "Record count", "Description", "Hosted zone ID", "Actions"];
@@ -29,6 +30,7 @@ export function HostedZonesView() {
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editZone, setEditZone] = useState<HostedZone | null>(null);
+  const [page, setPage] = useState(1);
   const notice = createdNotice ?? (deletedName ? `Deleted hosted zone ${deletedName}.` : null);
 
   const loadZones = useCallback(async (options?: { quiet?: boolean }) => {
@@ -97,6 +99,13 @@ export function HostedZonesView() {
     });
   }, [search, zones]);
 
+  const totalPages = Math.max(1, Math.ceil(visibleZones.length / pageSize));
+  if (page > totalPages) {
+    setPage(totalPages);
+  }
+  const currentPage = Math.min(page, totalPages);
+  const pageZones = visibleZones.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   if (auth.ready && !auth.token) {
     return null;
   }
@@ -147,16 +156,29 @@ export function HostedZonesView() {
       <div className="toolbar">
         <label className="search">
           <span className="sr-only">Find hosted zones</span>
+          <Search size={16} strokeWidth={2} aria-hidden="true" />
           <input
             type="search"
             placeholder="Find hosted zones"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
           />
         </label>
       </div>
+      <div className={visibleZones.length > 0 ? "table-block" : undefined}>
       <div className="table-wrap">
-        <table className="data-table">
+        <table className="data-table zones-table">
+          <colgroup>
+            <col className="col-name" />
+            <col className="col-type" />
+            <col className="col-count" />
+            <col className="col-description" />
+            <col className="col-id" />
+            <col className="col-actions" />
+          </colgroup>
           <thead>
             <tr>
               {columns.map((column) => (
@@ -178,7 +200,7 @@ export function HostedZonesView() {
                 </td>
               </tr>
             ) : (
-              visibleZones.map((zone) => (
+              pageZones.map((zone) => (
                 <tr key={zone.id}>
                   <td>
                     <Link className="zone-link" href={`/hosted-zones/${zone.id}`}>
@@ -187,7 +209,7 @@ export function HostedZonesView() {
                   </td>
                   <td>{zoneTypeLabel(zone.zone_type)}</td>
                   <td title="Record count is not available">—</td>
-                  <td>{zone.description || "—"}</td>
+                  <td className="wrap-cell">{zone.description || "—"}</td>
                   <td>{zone.id}</td>
                   <td>
                     <div className="row-actions">
@@ -202,12 +224,22 @@ export function HostedZonesView() {
           </tbody>
         </table>
       </div>
+      {visibleZones.length > 0 ? (
+        <TablePager
+          page={currentPage}
+          totalPages={totalPages}
+          onPrevious={() => setPage(currentPage - 1)}
+          onNext={() => setPage(currentPage + 1)}
+        />
+      ) : null}
+      </div>
       {createOpen ? (
         <HostedZoneForm
           onClose={() => setCreateOpen(false)}
           onSaved={async () => {
             setCreateOpen(false);
             setSearch("");
+            setPage(1);
             setCreatedNotice("Hosted zone created.");
             await loadZones({ quiet: true });
           }}

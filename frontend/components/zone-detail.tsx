@@ -222,7 +222,7 @@ function DeleteHostedZoneDialog({
           </p>
         </div>
         <footer className="modal-footer">
-          <Button type="button" onClick={onClose} disabled={pending}>
+          <Button type="button" onClick={onClose} disabled={pending} autoFocus>
             Cancel
           </Button>
           <Button variant="primary" type="button" onClick={onDelete} disabled={pending}>

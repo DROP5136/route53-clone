@@ -50,7 +50,7 @@ export function LoginForm({ registered = false }: { registered?: boolean }) {
         <span className="login-service">Route 53</span>
       </header>
       <main className="login-main">
-        <form className="login-card" onSubmit={onSubmit}>
+        <form className="login-card" method="post" onSubmit={onSubmit}>
           <h1>Sign in</h1>
           {registered ? (
             <div className="notice notice-success" role="status">
@@ -86,12 +86,14 @@ export function LoginForm({ registered = false }: { registered?: boolean }) {
           <Button className="login-submit" variant="primary" type="submit" disabled={pending}>
             {pending ? "Signing in" : "Sign in"}
           </Button>
-          <p className="login-return">
-            <Link href="/register">Create account</Link>
-          </p>
-          <p className="login-return">
-            <Link href="/">Return to Route 53</Link>
-          </p>
+          <div className="login-links">
+            <p>
+              <Link href="/register">Create account</Link>
+            </p>
+            <p>
+              <Link href="/">Return to Route 53</Link>
+            </p>
+          </div>
         </form>
       </main>
     </div>

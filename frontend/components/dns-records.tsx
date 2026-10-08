@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/button";
+import { pageSize, TablePager } from "@/components/table-pager";
 import { api, ApiError, recordTypes, type DNSRecord, type RecordTypeName } from "@/lib/api";
 
 const columns = ["Record name", "Type", "Value", "TTL", "Actions"];
@@ -16,6 +17,7 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
   const [search, setSearch] = useState("");
   const [formRecord, setFormRecord] = useState<DNSRecord | "create" | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<DNSRecord | null>(null);
+  const [page, setPage] = useState(1);
 
   const loadRecords = useCallback(
     async (options?: { quiet?: boolean }) => {
@@ -78,6 +80,13 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
     );
   }, [records, search]);
 
+  const totalPages = Math.max(1, Math.ceil(visibleRecords.length / pageSize));
+  if (page > totalPages) {
+    setPage(totalPages);
+  }
+  const currentPage = Math.min(page, totalPages);
+  const pageRecords = visibleRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
   let bodyMessage: string | null = null;
   if (loading && records.length === 0) {
     bodyMessage = "Loading records.";
@@ -117,16 +126,28 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
       <div className="toolbar">
         <label className="search">
           <span className="sr-only">Find records</span>
+          <Search size={16} strokeWidth={2} aria-hidden="true" />
           <input
             type="search"
             placeholder="Find records"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
           />
         </label>
       </div>
+      <div className={visibleRecords.length > 0 ? "table-block" : undefined}>
       <div className="table-wrap">
-        <table className="data-table">
+        <table className="data-table records-table">
+          <colgroup>
+            <col className="col-name" />
+            <col className="col-type" />
+            <col className="col-value" />
+            <col className="col-ttl" />
+            <col className="col-actions" />
+          </colgroup>
           <thead>
             <tr>
               {columns.map((column) => (
@@ -148,7 +169,7 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
                 </td>
               </tr>
             ) : (
-              visibleRecords.map((record) => (
+              pageRecords.map((record) => (
                 <tr key={record.id}>
                   <td className="record-name">{record.name}</td>
                   <td>{record.type}</td>
@@ -169,6 +190,15 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
             )}
           </tbody>
         </table>
+      </div>
+      {visibleRecords.length > 0 ? (
+        <TablePager
+          page={currentPage}
+          totalPages={totalPages}
+          onPrevious={() => setPage(currentPage - 1)}
+          onNext={() => setPage(currentPage + 1)}
+        />
+      ) : null}
       </div>
       {formRecord ? (
         <RecordForm
@@ -364,7 +394,7 @@ function DeleteRecordDialog({
           </p>
         </div>
         <footer className="modal-footer">
-          <Button type="button" onClick={onClose} disabled={pending}>
+          <Button type="button" onClick={onClose} disabled={pending} autoFocus>
             Cancel
           </Button>
           <Button variant="primary" type="button" onClick={onDelete} disabled={pending}>
