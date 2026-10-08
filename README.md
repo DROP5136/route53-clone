@@ -34,8 +34,8 @@ Stack:
 
 ### Route 53 experience
 
-- AWS-style header, sidebar, and breadcrumbs
-- Tables, search, pagination, forms, modals, and success/error notices
+- AWS-style navigation: header, sidebar, and breadcrumbs
+- Tables, search filters, pagination, forms, modals, and success/error notices
 
 ### Mocked sections
 
@@ -83,9 +83,16 @@ The Route 53 home page is also a placeholder. Hosted zones and DNS records are t
 - Python 3.10 or newer. The backend uses the versions in `backend/requirements.txt` (FastAPI 0.143.0, Uvicorn 0.54.0, SQLAlchemy 2.1.4, PyJWT 2.15.1, bcrypt 5.0.0, python-dotenv 1.2.4).
 - SQLite is used through Python’s standard library. A separate SQLite server is not required.
 
-## Setup
+## Local setup
 
 Start the backend before the frontend. The API creates `backend/app.db` on startup.
+
+Local development uses two untracked files:
+
+- `backend/.env`
+- `frontend/.env.local`
+
+The repository does not include an `.env.example` file.
 
 ### Backend
 
@@ -98,7 +105,7 @@ pip install -r requirements.txt
 
 On macOS or Linux, activate the environment with `source .venv/bin/activate`.
 
-Create `backend/.env`. The repository does not include an `.env.example` file. `JWT_SECRET_KEY` is required. The other two values have defaults.
+Create `backend/.env`. `JWT_SECRET_KEY` is required. `JWT_ALGORITHM` and `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` have defaults.
 
 ```text
 JWT_SECRET_KEY=replace-with-a-local-secret
@@ -177,7 +184,7 @@ Tables are created from `backend/app/models.py` when the API starts. Foreign key
 | `password_hash` | bcrypt hash |
 | `created_at` | UTC timestamp |
 
-A user owns hosted zones through `hosted_zones.user_id`. Deleting a user deletes those zones.
+A user owns hosted zones through `hosted_zones.user_id`. Deleting a user deletes those zones and, through the zone relationship, their DNS records.
 
 ### `hosted_zones`
 
@@ -202,7 +209,7 @@ A user owns hosted zones through `hosted_zones.user_id`. Deleting a user deletes
 | `name` | Required, 1–253 characters, no whitespace |
 | `record_type` | `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `PTR`, `SRV`, or `CAA` |
 | `value` | Required, 1–4000 characters |
-| `ttl` | Integer |
+| `ttl` | Integer from 0 through 2147483647. Record writes through the API must be from 1 through 2147483647. |
 | `created_at` | UTC timestamp |
 | `updated_at` | UTC timestamp, set on update |
 
