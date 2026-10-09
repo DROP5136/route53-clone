@@ -15,6 +15,7 @@ export type HostedZone = {
   description: string | null;
   created_at: string;
   updated_at: string;
+  record_count: number;
 };
 
 export const recordTypes = ["A", "AAAA", "CNAME", "TXT", "MX", "NS", "PTR", "SRV", "CAA"] as const;

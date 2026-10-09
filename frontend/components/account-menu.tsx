@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { useAuth } from "@/components/auth-provider";
 
-export function AccountMenu() {
+export function AccountMenu({ expanded, onToggle }: { expanded: boolean; onToggle: () => void }) {
   const { ready, token, username, logout } = useAuth();
 
   if (!ready) {
@@ -26,9 +26,25 @@ export function AccountMenu() {
   }
 
   return (
-    <button className="account-button" type="button" onClick={logout}>
-      <span className="account-name">{username ?? "Account"}</span>
-      <span className="account-detail">Sign out</span>
-    </button>
+    <div className="header-slot">
+      <button
+        className="account-button"
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={expanded}
+        onClick={onToggle}
+      >
+        <span className="account-name">{username ?? "Account"}</span>
+        <span className="account-detail">Account</span>
+      </button>
+      {expanded ? (
+        <div className="menu-pop" role="menu" aria-label="Account">
+          <p className="menu-label">{username ?? "Account"}</p>
+          <button className="menu-item" type="button" role="menuitem" onClick={logout}>
+            Sign out
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

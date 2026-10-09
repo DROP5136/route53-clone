@@ -1,3 +1,4 @@
+import os
 from collections.abc import Generator
 from pathlib import Path
 
@@ -5,7 +6,8 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-DATABASE_PATH = Path(__file__).resolve().parent.parent / "app.db"
+_database_override = os.environ.get("ROUTE53_DATABASE_PATH", "").strip()
+DATABASE_PATH = Path(_database_override) if _database_override else Path(__file__).resolve().parent.parent / "app.db"
 
 engine = create_engine(
     URL.create(drivername="sqlite", database=str(DATABASE_PATH)),

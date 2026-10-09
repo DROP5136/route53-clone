@@ -2,13 +2,13 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import HostedZone, User, ZoneType
+from app.models import DNSRecord, HostedZone, User, ZoneType
 
 router = APIRouter(prefix="/zones", tags=["zones"])
 
@@ -44,6 +44,30 @@ class HostedZoneResponse(BaseModel):
     description: str | None
     created_at: datetime
     updated_at: datetime
+    record_count: int
+
+
+def _record_counts(db: Session, zone_ids: list[int]) -> dict[int, int]:
+    if not zone_ids:
+        return {}
+    rows = db.execute(
+        select(DNSRecord.hosted_zone_id, func.count(DNSRecord.id))
+        .where(DNSRecord.hosted_zone_id.in_(zone_ids))
+        .group_by(DNSRecord.hosted_zone_id)
+    ).all()
+    return {zone_id: int(count) for zone_id, count in rows}
+
+
+def _zone_response(zone: HostedZone, record_count: int) -> HostedZoneResponse:
+    return HostedZoneResponse(
+        id=zone.id,
+        domain_name=zone.domain_name,
+        zone_type=zone.zone_type,
+        description=zone.description,
+        created_at=zone.created_at,
+        updated_at=zone.updated_at,
+        record_count=record_count,
+    )
 
 
 def _get_owned_zone(db: Session, zone_id: int, user_id: int) -> HostedZone:
@@ -85,21 +109,23 @@ def create_zone(
         ) from None
 
     db.refresh(zone)
-    return zone
+    return _zone_response(zone, 0)
 
 
 @router.get("", response_model=list[HostedZoneResponse])
 def list_zones(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[HostedZone]:
-    return list(
+) -> list[HostedZoneResponse]:
+    zones = list(
         db.scalars(
             select(HostedZone)
             .where(HostedZone.user_id == current_user.id)
             .order_by(HostedZone.domain_name, HostedZone.id)
         ).all()
     )
+    counts = _record_counts(db, [zone.id for zone in zones])
+    return [_zone_response(zone, counts.get(zone.id, 0)) for zone in zones]
 
 
 @router.get("/{zone_id}", response_model=HostedZoneResponse)
@@ -107,8 +133,9 @@ def get_zone(
     zone_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> HostedZone:
-    return _get_owned_zone(db, zone_id, current_user.id)
+) -> HostedZoneResponse:
+    zone = _get_owned_zone(db, zone_id, current_user.id)
+    return _zone_response(zone, _record_counts(db, [zone.id]).get(zone.id, 0))
 
 
 @router.put("/{zone_id}", response_model=HostedZoneResponse)
@@ -138,7 +165,7 @@ def update_zone(
         ) from None
 
     db.refresh(zone)
-    return zone
+    return _zone_response(zone, _record_counts(db, [zone.id]).get(zone.id, 0))
 
 
 @router.delete("/{zone_id}", status_code=status.HTTP_204_NO_CONTENT)

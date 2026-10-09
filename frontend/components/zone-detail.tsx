@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { X } from "lucide-react";
@@ -36,6 +36,7 @@ export function ZoneDetail() {
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [recordCount, setRecordCount] = useState<{ id: string; count: number } | null>(null);
 
   useEffect(() => {
     if (!auth.ready || !auth.token) {
@@ -70,6 +71,13 @@ export function ZoneDetail() {
     };
   }, [auth.ready, auth.token, zoneId]);
 
+  const reportRecordCount = useCallback(
+    (count: number) => {
+      setRecordCount({ id: zoneId, count });
+    },
+    [zoneId],
+  );
+
   if (auth.ready && !auth.token) {
     return null;
   }
@@ -87,7 +95,7 @@ export function ZoneDetail() {
       />
       <PageHeader
         title={title}
-        description="Hosted zone details."
+        description="Records in this hosted zone define how traffic is routed for the domain."
         actions={
           <>
             <Button onClick={() => setEditOpen(true)} disabled={!zone || loading}>
@@ -115,34 +123,41 @@ export function ZoneDetail() {
         </div>
       ) : null}
       {zone ? (
-        <dl className="detail-list">
-          <div className="detail-row">
-            <dt>Domain name</dt>
-            <dd>{zone.domain_name}</dd>
-          </div>
-          <div className="detail-row">
-            <dt>Zone type</dt>
-            <dd>{zoneTypeLabel(zone.zone_type)}</dd>
-          </div>
-          <div className="detail-row">
-            <dt>Description</dt>
-            <dd>{zone.description || "—"}</dd>
-          </div>
-          <div className="detail-row">
-            <dt>Hosted zone ID</dt>
-            <dd>{zone.id}</dd>
-          </div>
-          <div className="detail-row">
-            <dt>Created</dt>
-            <dd>{formatTimestamp(zone.created_at)}</dd>
-          </div>
-          <div className="detail-row">
-            <dt>Updated</dt>
-            <dd>{formatTimestamp(zone.updated_at)}</dd>
-          </div>
-        </dl>
+        <section className="detail-panel">
+          <h2>Details</h2>
+          <dl className="detail-list">
+            <div className="detail-row">
+              <dt>Hosted zone name</dt>
+              <dd>{zone.domain_name}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Type</dt>
+              <dd>{zoneTypeLabel(zone.zone_type)}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Record count</dt>
+              <dd>{recordCount !== null && recordCount.id === zoneId ? recordCount.count : zone.record_count}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Description</dt>
+              <dd>{zone.description || "—"}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Hosted zone ID</dt>
+              <dd>{zone.id}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Created</dt>
+              <dd>{formatTimestamp(zone.created_at)}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Updated</dt>
+              <dd>{formatTimestamp(zone.updated_at)}</dd>
+            </div>
+          </dl>
+        </section>
       ) : null}
-      {zone ? <DnsRecords zoneId={zone.id} /> : null}
+      {zone ? <DnsRecords zoneId={zone.id} onRecordsChange={reportRecordCount} /> : null}
       {editOpen && zone ? (
         <HostedZoneForm
           zone={zone}

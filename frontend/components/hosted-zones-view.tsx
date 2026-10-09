@@ -11,8 +11,16 @@ import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
 import { pageSize, TablePager } from "@/components/table-pager";
 import { api, ApiError, type HostedZone } from "@/lib/api";
+import { filterZones } from "@/lib/list-filters";
 
-const columns = ["Hosted zone name", "Type", "Record count", "Description", "Hosted zone ID", "Actions"];
+const columns: { label: string; numeric?: boolean }[] = [
+  { label: "Hosted zone name" },
+  { label: "Type" },
+  { label: "Record count", numeric: true },
+  { label: "Description" },
+  { label: "Hosted zone ID" },
+  { label: "Actions" },
+];
 
 function zoneTypeLabel(zoneType: HostedZone["zone_type"]) {
   return zoneType === "private" ? "Private" : "Public";
@@ -28,6 +36,7 @@ export function HostedZonesView() {
   const [error, setError] = useState<string | null>(null);
   const [createdNotice, setCreatedNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [zoneTypeFilter, setZoneTypeFilter] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editZone, setEditZone] = useState<HostedZone | null>(null);
   const [page, setPage] = useState(1);
@@ -84,20 +93,11 @@ export function HostedZonesView() {
     };
   }, [auth.ready, auth.token]);
 
-  const visibleZones = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return zones;
-    }
-    return zones.filter((zone) => {
-      const description = zone.description ?? "";
-      return (
-        zone.domain_name.toLowerCase().includes(query) ||
-        description.toLowerCase().includes(query) ||
-        String(zone.id).includes(query)
-      );
-    });
-  }, [search, zones]);
+  const filtersActive = search.trim() !== "" || zoneTypeFilter !== "";
+  const visibleZones = useMemo(
+    () => filterZones(zones, search, zoneTypeFilter),
+    [search, zoneTypeFilter, zones],
+  );
 
   const totalPages = Math.max(1, Math.ceil(visibleZones.length / pageSize));
   if (page > totalPages) {
@@ -116,7 +116,7 @@ export function HostedZonesView() {
   } else if (error && zones.length === 0) {
     bodyMessage = error;
   } else if (visibleZones.length === 0) {
-    bodyMessage = zones.length === 0 ? "No hosted zones." : "No hosted zones match your search.";
+    bodyMessage = zones.length === 0 ? "No hosted zones." : "No hosted zones match your filters.";
   }
 
   return (
@@ -153,13 +153,14 @@ export function HostedZonesView() {
           <span>{error}</span>
         </div>
       ) : null}
+      <div className="table-card">
       <div className="toolbar">
         <label className="search">
-          <span className="sr-only">Find hosted zones</span>
+          <span className="sr-only">Filter hosted zones</span>
           <Search size={16} strokeWidth={2} aria-hidden="true" />
           <input
             type="search"
-            placeholder="Find hosted zones"
+            placeholder="Filter hosted zones"
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -167,8 +168,41 @@ export function HostedZonesView() {
             }}
           />
         </label>
+        <label className="filter">
+          <span className="sr-only">Zone type</span>
+          <select
+            value={zoneTypeFilter}
+            onChange={(event) => {
+              setZoneTypeFilter(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All zone types</option>
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+        </label>
+        {filtersActive ? (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setZoneTypeFilter("");
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </button>
+        ) : null}
+        {!loading && zones.length > 0 ? (
+          <span className="toolbar-meta">
+            {filtersActive
+              ? `${visibleZones.length} of ${zones.length} hosted zones`
+              : `${zones.length} hosted ${zones.length === 1 ? "zone" : "zones"}`}
+          </span>
+        ) : null}
       </div>
-      <div className={visibleZones.length > 0 ? "table-block" : undefined}>
       <div className="table-wrap">
         <table className="data-table zones-table">
           <colgroup>
@@ -182,8 +216,8 @@ export function HostedZonesView() {
           <thead>
             <tr>
               {columns.map((column) => (
-                <th key={column} scope="col">
-                  {column}
+                <th key={column.label} scope="col" className={column.numeric ? "num" : undefined}>
+                  {column.label}
                 </th>
               ))}
             </tr>
@@ -208,7 +242,7 @@ export function HostedZonesView() {
                     </Link>
                   </td>
                   <td>{zoneTypeLabel(zone.zone_type)}</td>
-                  <td title="Record count is not available">—</td>
+                  <td className="num">{zone.record_count}</td>
                   <td className="wrap-cell">{zone.description || "—"}</td>
                   <td>{zone.id}</td>
                   <td>
@@ -228,6 +262,7 @@ export function HostedZonesView() {
         <TablePager
           page={currentPage}
           totalPages={totalPages}
+          totalItems={visibleZones.length}
           onPrevious={() => setPage(currentPage - 1)}
           onNext={() => setPage(currentPage + 1)}
         />
@@ -339,8 +374,9 @@ export function HostedZoneForm({
               required
             />
           </label>
+          <p className="field-hint">Example: example.com</p>
           <label className="field">
-            <span>Zone type</span>
+            <span>Type</span>
             <select name="zone_type" value={zoneType} onChange={(event) => setZoneType(event.target.value as "public" | "private")}>
               <option value="public">Public</option>
               <option value="private">Private</option>
@@ -350,6 +386,7 @@ export function HostedZoneForm({
             <span>Description</span>
             <textarea name="description" value={description} onChange={(event) => setDescription(event.target.value)} />
           </label>
+          <p className="field-hint">Optional note stored with the hosted zone.</p>
         </div>
         <footer className="modal-footer">
           <Button type="button" onClick={onClose} disabled={pending}>

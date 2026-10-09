@@ -6,15 +6,42 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/button";
 import { pageSize, TablePager } from "@/components/table-pager";
 import { api, ApiError, recordTypes, type DNSRecord, type RecordTypeName } from "@/lib/api";
+import { filterRecords } from "@/lib/list-filters";
+import { composeRecordValue, fieldsFromValue, recordValueError, type RecordValueFields } from "@/lib/record-value";
 
-const columns = ["Record name", "Type", "Value", "TTL", "Actions"];
+const columns: { label: string; numeric?: boolean }[] = [
+  { label: "Record name" },
+  { label: "Type" },
+  { label: "Value" },
+  { label: "TTL (seconds)", numeric: true },
+  { label: "Actions" },
+];
 
-export function DnsRecords({ zoneId }: { zoneId: number }) {
+const recordHints: Record<RecordTypeName, string> = {
+  A: "IPv4 address, such as 192.0.2.1.",
+  AAAA: "IPv6 address, such as 2001:db8::1.",
+  CNAME: "Host name that this name points to.",
+  TXT: "Text value, such as an SPF or verification string.",
+  MX: "Mail exchanger priority and mail server.",
+  NS: "Name server host name.",
+  PTR: "Host name for the reverse lookup.",
+  SRV: "Priority, weight, port, and target.",
+  CAA: "Flag, tag, and certification authority value.",
+};
+
+export function DnsRecords({
+  zoneId,
+  onRecordsChange,
+}: {
+  zoneId: number;
+  onRecordsChange?: (count: number) => void;
+}) {
   const [records, setRecords] = useState<DNSRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [recordTypeFilter, setRecordTypeFilter] = useState("");
   const [formRecord, setFormRecord] = useState<DNSRecord | "create" | null>(null);
   const [deleteRecord, setDeleteRecord] = useState<DNSRecord | null>(null);
   const [page, setPage] = useState(1);
@@ -28,6 +55,7 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
       try {
         const data = await api<DNSRecord[]>(`/zones/${zoneId}/records`);
         setRecords(data);
+        onRecordsChange?.(data.length);
       } catch (err) {
         if (!options?.quiet) {
           setRecords([]);
@@ -37,7 +65,7 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
         setLoading(false);
       }
     },
-    [zoneId],
+    [onRecordsChange, zoneId],
   );
 
   useEffect(() => {
@@ -53,6 +81,7 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
         const data = await api<DNSRecord[]>(`/zones/${zoneId}/records`);
         if (!cancelled) {
           setRecords(data);
+          onRecordsChange?.(data.length);
         }
       } catch (err) {
         if (!cancelled) {
@@ -68,17 +97,13 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
     return () => {
       cancelled = true;
     };
-  }, [zoneId]);
+  }, [onRecordsChange, zoneId]);
 
-  const visibleRecords = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return records;
-    }
-    return records.filter(
-      (record) => record.name.toLowerCase().includes(query) || record.type.toLowerCase().includes(query),
-    );
-  }, [records, search]);
+  const filtersActive = search.trim() !== "" || recordTypeFilter !== "";
+  const visibleRecords = useMemo(
+    () => filterRecords(records, search, recordTypeFilter),
+    [recordTypeFilter, records, search],
+  );
 
   const totalPages = Math.max(1, Math.ceil(visibleRecords.length / pageSize));
   if (page > totalPages) {
@@ -93,11 +118,11 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
   } else if (error && records.length === 0) {
     bodyMessage = error;
   } else if (visibleRecords.length === 0) {
-    bodyMessage = records.length === 0 ? "No records." : "No records match your search.";
+    bodyMessage = records.length === 0 ? "No records." : "No records match your filters.";
   }
 
   const countLabel =
-    search.trim() && records.length > 0
+    filtersActive && records.length > 0
       ? `${visibleRecords.length} of ${records.length} records`
       : `${records.length} ${records.length === 1 ? "record" : "records"}`;
 
@@ -122,14 +147,14 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
           <span>{error}</span>
         </div>
       ) : null}
-      {loading && records.length === 0 ? null : <p className="record-count">{countLabel}</p>}
+      <div className="table-card">
       <div className="toolbar">
         <label className="search">
-          <span className="sr-only">Find records</span>
+          <span className="sr-only">Filter records</span>
           <Search size={16} strokeWidth={2} aria-hidden="true" />
           <input
             type="search"
-            placeholder="Find records"
+            placeholder="Filter records"
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -137,8 +162,38 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
             }}
           />
         </label>
+        <label className="filter">
+          <span className="sr-only">Record type</span>
+          <select
+            value={recordTypeFilter}
+            onChange={(event) => {
+              setRecordTypeFilter(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All record types</option>
+            {recordTypes.map((recordType) => (
+              <option key={recordType} value={recordType}>
+                {recordType}
+              </option>
+            ))}
+          </select>
+        </label>
+        {filtersActive ? (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setRecordTypeFilter("");
+              setPage(1);
+            }}
+          >
+            Clear filters
+          </button>
+        ) : null}
+        {loading && records.length === 0 ? null : <span className="toolbar-meta">{countLabel}</span>}
       </div>
-      <div className={visibleRecords.length > 0 ? "table-block" : undefined}>
       <div className="table-wrap">
         <table className="data-table records-table">
           <colgroup>
@@ -151,8 +206,8 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
           <thead>
             <tr>
               {columns.map((column) => (
-                <th key={column} scope="col">
-                  {column}
+                <th key={column.label} scope="col" className={column.numeric ? "num" : undefined}>
+                  {column.label}
                 </th>
               ))}
             </tr>
@@ -174,7 +229,7 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
                   <td className="record-name">{record.name}</td>
                   <td>{record.type}</td>
                   <td className="record-value">{record.value}</td>
-                  <td>{record.ttl}</td>
+                  <td className="num">{record.ttl}</td>
                   <td>
                     <div className="row-actions">
                       <button className="text-button" type="button" onClick={() => setFormRecord(record)}>
@@ -195,6 +250,7 @@ export function DnsRecords({ zoneId }: { zoneId: number }) {
         <TablePager
           page={currentPage}
           totalPages={totalPages}
+          totalItems={visibleRecords.length}
           onPrevious={() => setPage(currentPage - 1)}
           onNext={() => setPage(currentPage + 1)}
         />
@@ -241,11 +297,15 @@ function RecordForm({
 }) {
   const [name, setName] = useState(record?.name ?? "");
   const [type, setType] = useState<RecordTypeName>(record?.type ?? "A");
-  const [value, setValue] = useState(record?.value ?? "");
+  const [fields, setFields] = useState<RecordValueFields>(fieldsFromValue(record?.type ?? "A", record?.value ?? ""));
   const [ttl, setTtl] = useState(record ? String(record.ttl) : "300");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const editing = record !== null;
+
+  function updateField(key: keyof RecordValueFields, next: string) {
+    setFields((current) => ({ ...current, [key]: next }));
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -259,6 +319,12 @@ function RecordForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const value = composeRecordValue(type, fields);
+    const message = recordValueError(type, value);
+    if (message) {
+      setError(message);
+      return;
+    }
     setError(null);
     setPending(true);
     const payload = {
@@ -289,7 +355,7 @@ function RecordForm({
 
   return (
     <div className="modal-backdrop">
-      <form className="modal" role="dialog" aria-modal="true" aria-labelledby="record-form-title" onSubmit={onSubmit}>
+      <form className="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="record-form-title" onSubmit={onSubmit}>
         <header className="modal-header">
           <h2 id="record-form-title">{editing ? "Edit record" : "Create record"}</h2>
           <button className="plain-icon" type="button" aria-label="Close" onClick={onClose} disabled={pending}>
@@ -316,10 +382,8 @@ function RecordForm({
               ))}
             </select>
           </label>
-          <label className="field">
-            <span>Value</span>
-            <textarea name="value" value={value} onChange={(event) => setValue(event.target.value)} maxLength={4000} required />
-          </label>
+          <p className="field-hint">{recordHints[type]}</p>
+          <RecordValueFieldsForm type={type} fields={fields} onChange={updateField} />
           <label className="field">
             <span>TTL</span>
             <input name="ttl" type="number" min={1} max={2147483647} step={1} value={ttl} onChange={(event) => setTtl(event.target.value)} required />
@@ -335,6 +399,97 @@ function RecordForm({
         </footer>
       </form>
     </div>
+  );
+}
+
+function valueLabel(type: RecordTypeName) {
+  if (type === "A") {
+    return "IPv4 address";
+  }
+  if (type === "AAAA") {
+    return "IPv6 address";
+  }
+  if (type === "CNAME" || type === "PTR") {
+    return "Host name";
+  }
+  if (type === "NS") {
+    return "Name server";
+  }
+  return "Value";
+}
+
+function RecordValueFieldsForm({
+  type,
+  fields,
+  onChange,
+}: {
+  type: RecordTypeName;
+  fields: RecordValueFields;
+  onChange: (key: keyof RecordValueFields, value: string) => void;
+}) {
+  if (type === "MX") {
+    return (
+      <div className="field-grid">
+        <label className="field">
+          <span>Priority</span>
+          <input name="mxPriority" type="number" min={0} max={65535} value={fields.mxPriority} onChange={(event) => onChange("mxPriority", event.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Mail server</span>
+          <input name="mxHost" value={fields.mxHost} onChange={(event) => onChange("mxHost", event.target.value)} required />
+        </label>
+      </div>
+    );
+  }
+  if (type === "SRV") {
+    return (
+      <div className="field-grid">
+        <label className="field">
+          <span>Priority</span>
+          <input name="srvPriority" type="number" min={0} max={65535} value={fields.srvPriority} onChange={(event) => onChange("srvPriority", event.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Weight</span>
+          <input name="srvWeight" type="number" min={0} max={65535} value={fields.srvWeight} onChange={(event) => onChange("srvWeight", event.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Port</span>
+          <input name="srvPort" type="number" min={0} max={65535} value={fields.srvPort} onChange={(event) => onChange("srvPort", event.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Target</span>
+          <input name="srvTarget" value={fields.srvTarget} onChange={(event) => onChange("srvTarget", event.target.value)} required />
+        </label>
+      </div>
+    );
+  }
+  if (type === "CAA") {
+    return (
+      <div className="field-grid">
+        <label className="field">
+          <span>Flag</span>
+          <input name="caaFlag" type="number" min={0} max={255} value={fields.caaFlag} onChange={(event) => onChange("caaFlag", event.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Tag</span>
+          <input name="caaTag" value={fields.caaTag} onChange={(event) => onChange("caaTag", event.target.value)} required />
+        </label>
+        <label className="field field-span">
+          <span>Value</span>
+          <input name="caaValue" value={fields.caaValue} onChange={(event) => onChange("caaValue", event.target.value)} required />
+        </label>
+      </div>
+    );
+  }
+  return (
+    <label className="field">
+      <span>{valueLabel(type)}</span>
+      {type === "TXT" ? (
+        <textarea name="value" value={fields.value} onChange={(event) => onChange("value", event.target.value)} maxLength={4000} required />
+      ) : (
+        <input name="value" value={fields.value} onChange={(event) => onChange("value", event.target.value)} maxLength={4000} required />
+      )}
+    </label>
   );
 }
 

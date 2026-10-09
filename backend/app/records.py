@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import DNSRecord, HostedZone, RecordType, User
+from app.record_values import normalize_record_value
 
 router = APIRouter(prefix="/zones/{zone_id}/records", tags=["records"])
 
@@ -38,6 +39,11 @@ class DNSRecordWrite(BaseModel):
         if not record_value:
             raise ValueError("value is required")
         return record_value
+
+    @model_validator(mode="after")
+    def check_value_for_type(self) -> "DNSRecordWrite":
+        self.value = normalize_record_value(self.type, self.value)
+        return self
 
 
 class DNSRecordResponse(BaseModel):

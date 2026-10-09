@@ -8,6 +8,13 @@ Stack:
 - FastAPI
 - SQLite
 
+## Live demo
+
+- Frontend: https://route53-clone-nu-three.vercel.app
+- Backend: https://drop5136.pythonanywhere.com
+
+The hosted API allows browser calls from the frontend origin above, as well as from local development.
+
 ## Features
 
 ### Authentication
@@ -22,20 +29,24 @@ Stack:
 - View, search, create, edit, and delete hosted zones
 - Data is stored in SQLite
 - Search matches domain name, description, and hosted zone ID in the browser
-- The list is paginated at 10 rows per page
+- Filter the list by Public or Private zone type. Clear filters restores the full list
+- The list is paginated at 10 rows per page over the filtered results
+- The record count is the number of DNS records stored for that zone
 
 ### DNS records
 
 - View, search, create, edit, and delete records inside a hosted zone
 - Data is stored in SQLite
 - Search matches record name and type in the browser
-- The list is paginated at 10 rows per page
+- Filter the list by record type. Clear filters restores the full list
+- The list is paginated at 10 rows per page over the filtered results
 - Supported types: A, AAAA, CNAME, TXT, MX, NS, PTR, SRV, CAA
+- A and AAAA values must be IP addresses. MX, SRV, and CAA use separate form fields and are stored as one value string
 
 ### Route 53 experience
 
 - AWS-style navigation: header, sidebar, and breadcrumbs
-- Tables, search filters, pagination, forms, modals, and success/error notices
+- Tables, search, zone-type and record-type filters, pagination, forms, modals, and success/error notices
 
 ### Mocked sections
 
@@ -92,7 +103,7 @@ Local development uses two untracked files:
 - `backend/.env`
 - `frontend/.env.local`
 
-The repository does not include an `.env.example` file.
+Copy the example environment files and replace the placeholder secret. Do not commit `backend/.env` or `frontend/.env.local`.
 
 ### Backend
 
@@ -105,13 +116,11 @@ pip install -r requirements.txt
 
 On macOS or Linux, activate the environment with `source .venv/bin/activate`.
 
-Create `backend/.env`. `JWT_SECRET_KEY` is required. `JWT_ALGORITHM` and `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` have defaults.
-
-```text
-JWT_SECRET_KEY=replace-with-a-local-secret
-JWT_ALGORITHM=HS256
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
+```powershell
+Copy-Item .env.example .env
 ```
+
+`JWT_SECRET_KEY` in `backend/.env` is required. `JWT_ALGORITHM` and `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` have defaults. Use your own secret in place of the placeholder.
 
 `JWT_ALGORITHM` may be `HS256`, `HS384`, or `HS512`. The token lifetime must be a positive number of minutes.
 
@@ -129,11 +138,11 @@ cd frontend
 npm install
 ```
 
-Create `frontend/.env.local`. This file is gitignored. `NEXT_PUBLIC_API_URL` is required.
-
-```text
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```powershell
+Copy-Item .env.example .env.local
 ```
+
+`frontend/.env.local` is gitignored. `NEXT_PUBLIC_API_URL` is required and should point at the API, normally `http://127.0.0.1:8000`.
 
 ```powershell
 npm run dev
@@ -141,7 +150,7 @@ npm run dev
 
 - App: http://localhost:3000
 
-The API allows browser calls from `http://localhost:3000` and `http://127.0.0.1:3000`.
+The API allows browser calls from `http://localhost:3000`, `http://127.0.0.1:3000`, and `https://route53-clone-nu-three.vercel.app`.
 
 ## Authentication
 
@@ -235,6 +244,8 @@ Authenticated routes expect `Authorization: Bearer <token>`. Request and respons
 | `GET` | `/zones` | List that user’s hosted zones. |
 | `GET` | `/zones/{zone_id}` | Return one owned hosted zone. |
 | `PUT` | `/zones/{zone_id}` | Update domain name, type, and description. |
+
+Zone responses include `record_count`, counted from `dns_records` in one query for the list. It is not a database column.
 | `DELETE` | `/zones/{zone_id}` | Delete the zone and its DNS records. |
 
 ### DNS records
@@ -248,6 +259,8 @@ Authenticated routes expect `Authorization: Bearer <token>`. Request and respons
 | `DELETE` | `/zones/{zone_id}/records/{record_id}` | Delete one record. |
 
 `ttl` on write must be from 1 through 2147483647.
+
+Record values stay a single string. A must be an IPv4 address and AAAA an IPv6 address. CNAME, NS, and PTR must be host names. MX is `priority mail-server`. SRV is `priority weight port target`. CAA is `flag tag "value"`. TXT is free text. Invalid values are rejected before they are stored.
 
 ### Health
 
